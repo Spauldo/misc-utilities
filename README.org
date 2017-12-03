@@ -1,0 +1,49 @@
+* misc-utilities
+
+  These are various UNIX utilities I've written for my own use.
+ 
+** convert_m4b_by_chapter
+
+   This Perl script uses ffmpeg to split an m4b audio file (such as an iTunes
+   audiobook) into mp3 files based on chapter tags.
+
+   The m4b file must have chapter tags for this to work.  If it doesn't, you
+   pretty much just convert the entire thing to one big mp3 file.
+
+** id3_abook
+
+   This Perl script removes the ID3 tags from a set of files and replaces them
+   with ID3v2 tags with audiobook-appropriate tags.  This is very useful if
+   you find yourself needing to tag hundreds of audiobook files.
+
+   Each invocation of id3_abook tags the files for one book.  You specify the
+   author, title, and optionally series and position in the series for each
+   book.  The files are numbered by the order the sort() function in Perl
+   places them (which in most cases is the same as the shell).
+
+   See the comments in the file itself for more information.
+
+** strip_comments
+
+   This command reads a c source file given by the -i argument and outputs the
+   code without comments.  It does not read STDIN, so it's not a filter.  By
+   default, it outputs to STDOUT but a file can be specified with -o.
+
+   The program works as a finite state machine using coroutines.  It switches
+   between two coroutines depending on if it's reading a comment section or
+   not.  The coroutines use call stacks in the heap created by mmap().
+
+   This program uses the getcontext() suite of functions, which has been
+   depreciated in recent versions of POSIX.  It works on Linux (tested on
+   Ubuntu 16.04) and FreeBSD (tested on FreeBSD 11), but doesn't want to compile
+   on NetBSD 7.02.  OpenBSD doesn't support getcontext() at all.
+
+   The nice thing about getcontext() and friends is that it makes cooperative
+   multitasking easy.  Standard C /can/ do coroutines, but it's a giant hack.
+   The bad part about getcontext() is that it's not c99 compliant, hence why it
+   was dropped from POSIX.  Don't try to compile this with --std=c99 or above.
+
+   Please note, *this is not how I normally write utilities*.  This file was
+   me playing around with computer-sciencey geek stuff.  It does the job, but
+   if I were writing this as a serious project it would be a lot simpler and
+   act as a proper filter.

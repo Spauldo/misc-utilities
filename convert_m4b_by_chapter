@@ -1,0 +1,78 @@
+#!/usr/bin/env perl
+
+# covert_m4b_by_chapter
+#
+# Read a chaptered m4b file (generally an audio book) and output the audio
+# as separate mp3 files.
+#
+# Generally useful for playing audio books on devices that don't support m4b
+# or don't handle large files well (such as the USB input on a truck stereo).
+#
+# Copyright (c) 2016 Jeff Spaulding <sarnet@gmail.com>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+
+use strict;
+use warnings;
+use POSIX qw(floor log10);
+use Data::Dumper;
+
+my $num_chapters = 0;
+
+while (@ARGV) {
+    my $file = pop @ARGV;
+    my @ffmpeg_output;
+    my @chapinfo;
+    my $chap_num = 1;
+    my $num_chaps;
+
+    if (! -r $file) {
+	print ("Can't read $file\n");
+    }
+
+    print("Processing $file:\n");
+
+    @ffmpeg_output = grep { /    Chapter #/ } `ffmpeg -i $file 2>&1`;
+
+    foreach my $line (@ffmpeg_output) {
+	my @tokens = split(/,?\s+/, $line);
+	push @chapinfo, { start => $tokens[4], end => $tokens[6] };
+    }
+
+    $num_chaps = @chapinfo;
+
+    for (my $i = 0; $i < floor(log10($num_chaps)); $i++) {
+	$chap_num = "0" . $chap_num;
+    }
+
+    foreach my $chap (@chapinfo) {
+	my $start = $chap->{'start'};
+	my $end   = $chap->{'end'};
+
+	my $outfile = $file;
+	$outfile =~ s/\.[A-Za-z0-9]+$/-$chap_num.mp3/;
+
+	print "  Chapter: $chap_num of $num_chaps\n";
+	print "    Start: $start\n";
+	print "    End:   $end\n";
+
+	print "  Creating $outfile: ";
+
+	`ffmpeg -i $file -ss $start -to $end -loglevel panic $outfile`;
+
+	print "done.\n\n";
+
+	$chap_num++;
+    }
+}

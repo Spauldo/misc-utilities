@@ -1,0 +1,164 @@
+#!/usr/bin/perl
+
+# id3_abook
+#
+# Clean up old ID3 tags and replace them with ID3 tags appropriate for audio
+# books.
+#
+# This program requires MP3::Tag.  You can install it from CPAN.
+#
+# This program requires that the chronological order of the files is the same
+# as the sort order.  Note that it's _Perl's_ sort order, not the shell's.
+# That hasn't been a problem for me, but I work in English and name my files
+# the same except for book and track numbers.
+#
+# Example filename structure for book 3 in a series and track 128:
+# Author-Series_name-03-Title-128.mp3
+#
+# ID3v1 tags are completely removed.  The files will not have ID3v1 tags after
+# this script has run.  This may cause problems with really old players.  I
+# don't have any of those, so I don't worry about it, but it shouldn't be
+# difficult to add ID3v1 tag support in here if you need it.
+#
+# This program sets the following fields in ID3v2:
+#   TCOM (composer):                  Author's name
+#   TPE1 (performer):                 Author's name
+#   TEXT (text writer):               Author's name
+#   TALB (album title):               Book title
+#   TIT2 (song name):                 Book title
+#   TCON (content type):              The string "Audiobook"
+#   TRCK (track number):              The track number
+#
+# If the book is part of a series, the following are also set:
+#   TIT1 (content group description): Series name
+#   TPOS (part of a set):             Position in series
+#
+# Note that TPOS isn't a numerical sort, only a description.  This means for
+# series with prequels or "in between" books, you can use strings like "3.1" or
+# "2 1/2".
+#
+# Copyright (c) 2016 Jeff Spaulding <sarnet@gmail.com>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+
+use MP3::Tag;
+use Getopt::Std;
+
+my %options;
+getopt("atshnb", \%options);
+
+if (exists $options{"h"}) {
+	&parseerror();
+}
+
+# Main variables
+my $author = "";
+my $title = "";
+my $series = "";
+my $series_num = 0;
+my @filelist = @ARGV;
+my $track = "1";
+
+# Handle parsing
+if ((exists $options{"a"}) && (exists $options{"t"})) {
+	$author = $options{"a"};
+	$title  = $options{"t"};
+} else {
+	&parseerror;
+}
+
+if (exists $options{"s"}) {
+	if (exists $options{"n"}) {
+		$series = $options{"s"};
+		$series_num = $options{"n"};
+	} else {
+		&parseerror;
+	}
+}
+
+if (exists $options{"b"}) {
+	$track = $options{"b"};
+}
+
+##############################################################################
+# Start processing files
+
+sort(@filelist);
+my $file = "";
+
+while (length($track) < 4) {
+	$track = "0" . $track;
+}
+
+print "Author: $author\nTitle: $title\n";
+print "Series: $series\nNumber: $series_num\n" if $series ne "";
+
+while ($file = shift @filelist) {
+	if (!(-w $file)) {
+		die "$file is not writable\n";
+	}
+
+	print "Processing $file:\n";
+
+	my $tag = MP3::Tag->new($file);
+	$tag->get_tags();
+
+    # Remove old tags
+	if (exists $tag->{ID3v1}) {
+		print "\tRemoving ID3v1 tag... ";
+		$tag->{ID3v1}->remove_tag();
+		print "done\n";
+	}
+
+	if (exists $tag->{ID3v2}) {
+		print "\tRemoving ID3v2 tag... ";
+		$tag->{ID3v2}->remove_tag();
+		print "done\n";
+	}
+
+	print "\tPreparing new tag... ";
+	my $id3v2 = $tag->new_tag("ID3v2");
+
+	$id3v2->remove_tag();
+	$id3v2->add_frame("TCOM", $author);
+	$id3v2->add_frame("TPE1", $author);
+	$id3v2->add_frame("TEXT", $author);
+	$id3v2->add_frame("TALB", $title);
+	$id3v2->add_frame("TIT2", $title);
+	$id3v2->add_frame("TCON", "Audiobook");
+	$id3v2->add_frame("TRCK", $track);
+
+	if (($series ne "") && ($series_num != 0)) {
+		$id3v2->add_frame("TPOS", $series_num);
+		$id3v2->add_frame("TIT1", $series);
+	}
+	print "done\n";
+
+	print "\tWriting tag... ";
+	$id3v2->write_tag();
+	print "done\n";
+
+    $track++;
+
+	print "Done.\n";
+}
+
+
+
+##############################################################################
+# Print usage message and die
+sub parseerror {
+	die "Usage: $0 -a <author> -t <title> [-s <series name> \\\n   -n <place in series>] files\n";
+}
+
