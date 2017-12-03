@@ -1,4 +1,4 @@
-j/*
+/*
  * strip_comments.c
  *
  * Reads a C source file and outputs the code without comments.
